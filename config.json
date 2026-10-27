@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "thresholdChars": 1500,
+  "excludeTools": [],
+  "summaryTemplate": "[工具原文已外置；结论见检查点 {{checkpoint}}]\n{{index}}",
+  "watermarkChars": 24000,
+  "recentProtectionRequests": 2,
+  "reminderIntervalRequests": 6,
+  "minNetReductionChars": 4000,
+  "minTailContributionChars": 1000
+}

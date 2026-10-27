@@ -1,0 +1,34 @@
+{
+  "provenance": {
+    "kind": "sanitized-regression",
+    "source": "Historical INVALID_COVERAGE argument shape; private session and call identifiers removed for publication",
+    "pluginVersion": "0.1.1",
+    "observedResult": {"ok": false, "status": "invalid-checkpoint", "code": "INVALID_COVERAGE"}
+  },
+  "arguments": {
+    "action": "checkpoint",
+    "state": {
+      "subgoal": "修复、边界回归、说明及版本更新完成",
+      "nextStep": "最后核对版本与测试命令退出状态，报告真实验证结果。",
+      "findings": [
+        {"text": "合同要求的CSV语法、严格数值、原子性和幂等冲突均已实现并测试。", "refs": ["fixture:contract"]},
+        {"text": "原有5项加新增7项测试全部通过；真实28订单与JSON样例逐项对比通过。", "refs": ["fixture:tests", "fixture:examples"]}
+      ],
+      "constraints": ["公开API保持不变；无新依赖；现有test/import.test.mjs未修改；仅隔离项目内工作。", "用read读取已有文本后再修改；每次命令检查退出码；不伪造验证结果。"],
+      "changes": "重写src/csv.mjs状态机和src/importer.mjs全批预校验/提交；新增test/boundaries.test.mjs七项边界测试；README说明新行为；package版本1.0.0->1.0.1。",
+      "validation": "原有5测试基线全失败exit1；核心修复后5通过；新增后11通过1失败，因新增空行夹具只有尾部换行已按合同修正为真实空行；最终12通过0失败，并执行node --check两实现模块。",
+      "unresolved": [{"id": "exit-confirm", "text": "最后一次bash结果未显示exit code marker，需用命令显式打印实际退出码再最终汇报。", "refs": []}],
+      "hypotheses": []
+    },
+    "covered": [
+      {"ref": "fixture:contract", "conclusion": "合同已完全落实并写入回归测试，后续只剩最终验证和报告。", "evidenceQuote": "Validate the entire batch before mutating either Map.", "noLongerDirectlyNeeded": true},
+      {"ref": "fixture:examples", "conclusion": "JSON样例已被新增测试动态加载逐项对比，通过后无需展开原文。", "evidenceQuote": "Invoice 1000, ship after 09:30; keep upright.", "noLongerDirectlyNeeded": true}
+    ],
+    "retain": [
+      {"ref": "fixture:tests", "reason": "原有测试保持不变的依据"},
+      {"ref": "fixture:sample-data", "reason": "真实样例数据依据"},
+      {"ref": "fixture:baseline-failure", "reason": "基线失败验证记录"},
+      {"ref": "fixture:boundary-failure", "reason": "新增测试首次失败的诊断记录"}
+    ]
+  }
+}

@@ -1,0 +1,91 @@
+// Offline adjudication only: no Agent, provider, credentials, or model entry.
+// The original result, ledger, plan, and captured tool responses remain immutable.
+import assert from 'node:assert/strict';
+import { readFile, writeFile, realpath, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { acceptRepair } from './repair-fixture.mjs';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const scope=join(root,'evidence/repair-20261026'),attempt=join(scope,'attempt-1');
+const sha=x=>createHash('sha256').update(x).digest('hex');
+const inputHashes={};
+async function input(relative) {const bytes=await readFile(join(root,relative));inputHashes[relative]=sha(bytes);return JSON.parse(bytes);}
+const prefix='evidence/repair-20261026/';
+const original=await input(prefix+'attempt-1/result.json');
+const plan=await input(prefix+'plan.json');
+const ledger=await input(prefix+'attempt-ledger.json');
+const legacy=await input('evidence/smoke/attempt-ledger.json');
+const before=await input(prefix+'attempt-1/session-before-native-probe.json');
+const final=await input(prefix+'attempt-1/session.json');
+const recovery=await input(prefix+'attempt-1/native-probe-gongjuyasuo-result.json');
+const read=await input(prefix+'attempt-1/native-probe-read-result.json');
+const failedProbe=await input(prefix+'attempt-1/native-recovery-read-probe.json');
+assert.equal(original.ok,false,'preserve the actual automated failure');
+assert.equal(ledger.length,1);assert.equal(ledger[0].status,'failed');assert.equal(legacy.length,3);
+assert.equal(ledger[0].planHash,inputHashes[prefix+'plan.json']);
+assert.equal(ledger[0].legacyLedgerHash,inputHashes['evidence/smoke/attempt-ledger.json']);
+assert.equal(plan.maxModelRuns,1);assert.equal(plan.stage2Paused,true);assert.equal(plan.version,'0.1.3');
+assert.equal(original.frozenSourcesUnchanged,true);assert.equal(original.legacyLedgerUnchanged,true);
+assert.deepEqual(original.configEvidence.formal,original.configEvidence.temporary);
+assert.deepEqual(original.configEvidence.differences,[]);assert.equal(original.configEvidence.formal.watermarkChars,24000);
+assert.equal(original.configEvidence.formal.minNetReductionChars,4000);
+const runtimeFiles=['lib/index.js','lib/core.js','lib/observability.js','lib/telemetry.js'];
+const runtimeBytes=await Promise.all(runtimeFiles.map(async path=>{const bytes=await readFile(join(root,path));assert.equal(sha(bytes),plan.sourceHashes[path],path+' must match the actual model task');return bytes;}));
+const runtimeHash=sha(Buffer.concat(runtimeBytes));
+assert.equal(runtimeHash,'e0dbb50e9f248eb263367f1716b7328769243ee820ab20f539cad0dffa510a00');
+for(const path of ['config.json','scripts/fixture.mjs','scripts/acceptance.mjs','scripts/repair-fixture.mjs'])assert.equal(sha(await readFile(join(root,path))),plan.sourceHashes[path]);
+const diagnosticBytes=await readFile(join(attempt,'diagnostics.jsonl'));
+inputHashes[prefix+'attempt-1/diagnostics.jsonl']=sha(diagnosticBytes);
+const diagnostics=diagnosticBytes.toString('utf8').trim().split('\n').map(x=>JSON.parse(x));
+const loaded=diagnostics.find(x=>x.kind==='loaded');assert.equal(loaded.runtime.version,'0.1.3');assert.equal(loaded.runtime.sourceHash,runtimeHash);
+assert.deepEqual(loaded.settings,original.configEvidence.formal);
+const calls=diagnostics.filter(x=>x.kind==='llm-call');assert.equal(calls.length,17);assert.equal(calls.length,original.actualLlmCalls);
+const totalTokens=calls.reduce((sum,c)=>{assert.ok(Number.isFinite(c.exactUsage?.totalTokens));return sum+c.exactUsage.totalTokens;},0);
+assert.equal(totalTokens,original.actualObservedTotal.totalTokens);
+const record=e=>e.type==='user/message'&&e.data.source?.kind==='plugin:dsh-gongjuyasuo:record'?{type:e.data.source.recordType,data:e.data.source.recordData}:e.type==='tool/result'&&e.data.meta?.gongjuyasuo?.recordType?{type:e.data.meta.gongjuyasuo.recordType,data:e.data.meta.gongjuyasuo.data}:null;
+const text=e=>(e.data.message??e.data).content.map(x=>x.type==='text'?x.text:'').join('');
+const checkpoints=before.events.filter(e=>record(e)?.type==='plugin:dsh-gongjuyasuo/checkpoint');assert.equal(checkpoints.length,1);
+const cp=record(checkpoints[0]).data;
+const finished=before.events.filter(e=>record(e)?.type==='plugin:dsh-gongjuyasuo/finished');assert.equal(finished.length,1);
+const successful=record(finished[0]).data.successful;assert.equal(successful.length,3);
+const events=new Map(before.events.map(e=>[e.seq,e]));
+for(const item of successful) {
+  const source=events.get(item.originalSeq),replacement=events.get(item.replacementSeq),prune=events.get(item.replacementSeq-1);
+  assert.equal(source.type,'tool/result');assert.equal(replacement.type,'tool/result');assert.equal(source.surfaceOp,'append');
+  assert.equal(prune.type,'compaction/prune');assert.deepEqual(prune.data.shadowedSeqs,[source.seq]);
+  assert.equal(replacement.surfaceOp.op,'replace');assert.equal(replacement.surfaceOp.startSeq,source.seq);assert.equal(replacement.surfaceOp.endSeq,source.seq);
+  assert.ok(replacement.sourceEventSeqs.includes(source.seq));assert.ok(replacement.sourceEventSeqs.includes(record(finished[0]).data.manifestSeq));
+  const {content:oldContent,...oldEnvelope}=source.data.message,{content:newContent,...newEnvelope}=replacement.data.message;
+  assert.deepEqual(oldEnvelope,newEnvelope,'replacement must be content-only');assert.ok(text(replacement).includes(item.ref));
+  const covered=cp.covered.find(x=>x.ref===item.ref);assert.ok(covered);assert.equal(covered.noLongerDirectlyNeeded,true);
+  assert.ok(Array.from(covered.evidenceQuote).length>=16);assert.ok(text(source).includes(covered.evidenceQuote));
+  assert.ok(!cp.retain.some(x=>x.ref===item.ref));assert.ok(!cp.state.unresolved.some(x=>x.refs.includes(item.ref)));
+}
+const last=Math.max(...successful.map(x=>x.replacementSeq)),lastTime=events.get(last).time;
+const laterTools=before.events.filter(e=>e.type==='tool/call'&&e.seq>last);
+assert.ok(laterTools.length>0);assert.ok(calls.some(c=>Date.parse(c.time)>=lastTime));
+assert.ok(before.events.some(e=>e.type==='assistant/message'&&e.seq>last&&!e.data.interrupted));
+const ends=before.events.filter(e=>e.type==='turn/end');assert.equal(ends.length,1);assert.equal(ends[0].data.reason.kind,'completed');
+assert.equal(original.metrics.counts.effectiveReminders,1);assert.equal(original.publicTestsExit,0);
+assert.equal(original.independent.checks,112);assert.equal(original.independent.original.checks,57);assert.equal(original.independent.restock.checks,55);
+assert.equal(recovery.isError,false);assert.equal(read.isError,false);assert.equal(recovery.value.sourceSeq,successful[0].originalSeq);
+const source=events.get(recovery.value.sourceSeq),raw=Buffer.from(text(source),'utf8');
+const [canonicalIssued,canonicalRead]=await Promise.all([realpath(recovery.value.path),realpath(read.value.path)]);
+assert.equal(canonicalIssued,canonicalRead,'canonical paths must identify one file');
+const [issuedStat,readStat]=await Promise.all([stat(recovery.value.path),stat(read.value.path)]);
+assert.ok(issuedStat.isFile()&&readStat.isFile());assert.equal(issuedStat.dev,readStat.dev);assert.equal(issuedStat.ino,readStat.ino);
+const recovered=await readFile(canonicalIssued);assert.deepEqual(recovered,raw);assert.equal(recovery.value.bytes,raw.length);assert.equal(recovery.value.sha256,sha(raw));
+const lines=raw.toString('utf8').split('\n').map(s=>s.endsWith('\r')?s.slice(0,-1):s);
+assert.ok(read.value.lines.length>0);
+for(const line of read.value.lines){assert.equal(line.text,lines[line.number-1],'every captured native-read line must match the immutable source');}
+assert.equal(failedProbe.ok,false);assert.equal(failedProbe.failure.code,'ERR_ASSERTION');
+assert.notEqual(recovery.value.path,read.value.path,'this is the observed literal-path defect');
+assert.ok(failedProbe.failure.message.startsWith('native read must resolve the recovered file'));
+assert.deepEqual(final.events.slice(0,before.events.length),before.events,'post-task probe must not rewrite the model task');
+const independent=await acceptRepair(original.taskRoot);assert.equal(independent.checks,112);assert.equal(independent.ok,true);
+const audit={schemaVersion:1,scope:'repair-20261026',originalAutomatedResult:false,originalExitCode:1,originalFailurePreserved:true,offlineVerifiedModelChain:true,actualModelCalls:17,additionalTaskModelCalls:0,effectiveReminders:1,validCheckpoints:1,replacedResults:3,laterBusinessToolCalls:laterTools.length,independentChecks:112,publicTestsExit:0,actualSampleTokens:totalTokens,notFullRepairSessionUsage:true,netBenefitClaimed:false,nativeRecovery:{ok:true,modelInitiated:false,sourceSeq:source.seq,bytes:raw.length,sha256:sha(raw),canonicalPathsEqual:true,sameDeviceAndInode:true,readWindowLines:read.value.lines.length,everyReadLineMatchesSource:true},harnessDefect:'literal /var versus /private/var path comparison; filesystem identity and exact content independently verified',sampleRuntime:{version:loaded.runtime.version,pid:loaded.runtime.pid,sourceHash:runtimeHash,currentRuntimeMatchesFrozenSample:true},desktopReloadVerified:false,stage2Comparisons:0,stage2Paused:true,inputHashes};
+const output=join(scope,'offline-review.json');
+try{await writeFile(output,JSON.stringify(audit,null,2),{flag:'wx',mode:0o600});}
+catch(error){if(error.code!=='EEXIST')throw error;assert.deepEqual(JSON.parse(await readFile(output,'utf8')),audit,'refuse to silently reuse changed evidence');}
+console.log(JSON.stringify(audit,null,2));

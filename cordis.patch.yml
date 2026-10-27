@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-gongjuyasuo
+      name: ./lib/index.js

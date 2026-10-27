@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="850" viewBox="0 0 600 850" role="img" aria-labelledby="title desc">
+<title id="title">Single-task handoff, externalization, and recovery</title><desc id="desc">Conceptual workflow, not a screenshot: inspect sources, hand off state, save and verify originals, recheck before replacement, then recover by original ref when needed. Ineligible originals stay intact.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="m0 0 7 4-7 4" fill="none" stroke="#6a8990" stroke-width="1.5"/></marker></defs>
+<rect width="600" height="850" rx="22" fill="#f4f8f8"/>
+<g font-family="sans-serif"><text x="40" y="52" font-size="28" font-weight="700" fill="#173a40">State first. Source retained.</text><text x="40" y="86" font-size="18" fill="#4d6b72">A single-task concept, not forced cleanup</text>
+<g fill="white" stroke="#c5ddd8"><rect x="40" y="120" width="520" height="96" rx="16"/><rect x="40" y="250" width="520" height="96" rx="16"/><rect x="40" y="380" width="520" height="96" rx="16"/><rect x="40" y="510" width="520" height="96" rx="16"/><rect x="40" y="640" width="520" height="96" rx="16"/></g>
+<g fill="#1c6d60" font-size="22" font-weight="700"><text x="60" y="158">01</text><text x="60" y="288">02</text><text x="60" y="418">03</text><text x="60" y="548">04</text><text x="60" y="678">05</text></g>
+<g fill="#183c42" font-size="23" font-weight="600"><text x="104" y="158">Inspect actual source refs</text><text x="104" y="288">Checkpoint from the task model</text><text x="104" y="418">Save originals and read back</text><text x="104" y="548">Recheck, then replace</text><text x="104" y="678">Recover by the original ref</text></g>
+<g fill="#516e73" font-size="18"><text x="104" y="190">Consumed pure text past recent protection</text><text x="104" y="320">Sources, constraints, open issues, retained items</text><text x="104" y="450">DSH shared spills and retained source events</text><text x="104" y="580">Preserve identity, calls, and recovery index</text><text x="104" y="710">Read the file; do not rerun the old command</text></g>
+<g stroke="#6a8990" stroke-width="2" marker-end="url(#arrow)"><path d="M300 220v23"/><path d="M300 350v23"/><path d="M300 480v23"/><path d="M300 610v23"/></g>
+<rect x="40" y="768" width="520" height="54" rx="12" fill="#e3eee9"/><text x="60" y="802" font-size="18" font-weight="600" fill="#235b50">Protection or budget fails → keep text, continue task</text>
+</g></svg>

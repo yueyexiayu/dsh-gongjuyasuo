@@ -1,0 +1,10 @@
+{
+  "name": "dsh-gongjuyasuo",
+  "version": "0.1.3",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {".": "./lib/index.js"},
+  "scripts": {"build": "/usr/local/bin/node --check lib/index.js && /usr/local/bin/node --check lib/core.js && /usr/local/bin/node --check lib/observability.js && /usr/local/bin/node --check lib/telemetry.js && /usr/local/bin/node --check scripts/smoke.mjs && /usr/local/bin/node --check scripts/fixture.mjs && /usr/local/bin/node --check scripts/acceptance.mjs && /usr/local/bin/node --check scripts/repair-fixture.mjs && /usr/local/bin/node --check scripts/recovery-path.mjs && /usr/local/bin/node --check scripts/verify-repair-evidence.mjs", "test": "ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness' --test test/*.test.mjs"},
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}}
+}

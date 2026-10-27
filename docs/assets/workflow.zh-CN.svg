@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="850" viewBox="0 0 600 850" role="img" aria-labelledby="title desc">
+<title id="title">单任务工具原文交接与恢复流程示意</title><desc id="desc">先检查真实来源，由执行模型交接状态，再保存校验、重新准入后逐项外置；不合格保留原文，需要时使用原ref恢复。不是实际界面。</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="m0 0 7 4-7 4" fill="none" stroke="#6a8990" stroke-width="1.5"/></marker></defs>
+<rect width="600" height="850" rx="22" fill="#f4f8f8"/>
+<g font-family="sans-serif"><text x="40" y="52" font-size="28" font-weight="700" fill="#173a40">先交接，再外置</text><text x="40" y="86" font-size="18" fill="#4d6b72">单任务流程示意 · 不是强制清理</text>
+<g fill="white" stroke="#c5ddd8"><rect x="40" y="120" width="520" height="96" rx="16"/><rect x="40" y="250" width="520" height="96" rx="16"/><rect x="40" y="380" width="520" height="96" rx="16"/><rect x="40" y="510" width="520" height="96" rx="16"/><rect x="40" y="640" width="520" height="96" rx="16"/></g>
+<g fill="#1c6d60" font-size="22" font-weight="700"><text x="60" y="158">01</text><text x="60" y="288">02</text><text x="60" y="418">03</text><text x="60" y="548">04</text><text x="60" y="678">05</text></g>
+<g fill="#183c42" font-size="23" font-weight="600"><text x="104" y="158">inspect：取得真实来源</text><text x="104" y="288">checkpoint：交接状态</text><text x="104" y="418">保存原文，并读回校验</text><text x="104" y="548">重新准入，再逐项外置</text><text x="104" y="678">recover：按原 ref 恢复</text></g>
+<g fill="#516e73" font-size="18"><text x="104" y="190">仅考虑已消费、过保护期的纯文本</text><text x="104" y="320">来源、约束、未决问题与保留项</text><text x="104" y="450">使用 DSH 共享 spill 和保留源事件</text><text x="104" y="580">保留消息身份、调用和恢复索引</text><text x="104" y="710">再用文件工具读取，不重跑旧命令</text></g>
+<g stroke="#6a8990" stroke-width="2" marker-end="url(#arrow)"><path d="M300 220v23"/><path d="M300 350v23"/><path d="M300 480v23"/><path d="M300 610v23"/></g>
+<rect x="40" y="768" width="520" height="54" rx="12" fill="#e3eee9"/><text x="60" y="802" font-size="19" font-weight="600" fill="#235b50">任一保护或预算不满足 → 原文保留，任务继续</text>
+</g></svg>
