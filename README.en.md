@@ -4,7 +4,7 @@
   <p><strong>Hand off the state. Release tool text. Keep the original recoverable.</strong></p>
   <p>An experimental local Host plugin for individual long-running DeepSeek Harness tasks.</p>
   <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-  <p><a href="package.json">Plugin 0.1.3</a> · Host-only / ESM · No additional summarization model</p>
+  <p><a href="package.json">Plugin 0.1.4</a> · Host-only / ESM · No additional summarization model</p>
   <p><a href="#features">Features</a> · <a href="#how-it-works">How it works</a> · <a href="#quick-start">Quick start</a> · <a href="#configuration">Configuration</a> · <a href="#validation-and-limitations">Validation and limitations</a> · <a href="#faq">FAQ</a></p>
 </div>
 
