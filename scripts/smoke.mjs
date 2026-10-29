@@ -86,7 +86,8 @@ async function nativeRecoveryReadProbe(before,llm) {
     const execute=async(name,args)=>{
       const callId=`native-repair-probe-${name}-${randomUUID()}`;proof.callIds.push(callId);
       const call=handle.agent.session.append('tool/call',{turn:lastStep.turn,step:lastStep.step,callId,name,arguments:args});proof.events.push(call.seq);
-      const result=await ctx.tools.execute({name,callId,agent:handle.agent,arguments:args,signal:new AbortController().signal});
+      const batch=await ctx.tools.execute({calls:[{type:'tool-call',id:callId,name,arguments:JSON.stringify(args)}],agent:handle.agent,signal:new AbortController().signal});
+      const result=batch.results[0].result;
       const message=llm.freezeMessage({id:callId+'-result',role:'tool',toolCallId:callId,source:{kind:'tool',callId},content:result.content,...(result.isError?{isError:true}:{})});
       const event=handle.agent.session.append('tool/result',{turn:lastStep.turn,step:lastStep.step,message,...(result.meta?{meta:result.meta}:{})},{surfaceOp:'append'});proof.events.push(event.seq);
       await writeFile(join(attemptRoot,`native-probe-${name}-result.json`),JSON.stringify(result,null,2));
@@ -133,30 +134,39 @@ try {
       assert.deepEqual(Object.fromEntries(await Promise.all(sourceFiles.map(async f=>[f,hash(await readFile(join(pluginRoot,f)))]))),plan.sourceHashes,'SOURCE_CHANGED_AFTER_ADMISSION');
     }
   }
-  const names=['cordis','dsh-session','dsh-session-projection','dsh-token-meter','dsh-session-query','dsh-agent','dsh-llm','dsh-system-prompt','dsh-tools','dsh-agent-loop','dsh-fs-local','dsh-working-directory'];
-  const [cordis,session,projection,token,query,agent,llm,prompt,tools,loop,fsLocal,wd]=await Promise.all(names.map(mod));
+  const names=['cordis','dsh-session','dsh-session-projection','dsh-token-meter','dsh-session-query','dsh-agent','dsh-llm','dsh-system-prompt','dsh-tools','dsh-tool-executor-native','dsh-agent-loop','dsh-fs-local','dsh-working-directory'];
+  const [cordis,session,projection,token,query,agent,llm,prompt,tools,native,loop,fsLocal,wd]=await Promise.all(names.map(mod));
   const tokenClient=await import(base+'dsh-token-meter/lib/types/client.js');ctx=new cordis.Context();
   for(const [service,options] of [[session.SessionStore,{}],[projection.SessionProjectionRegistry,{}],[token.TokenMeter,{}],[query.SessionQueryEngine,{}],[agent.AgentRegistry,{}],[llm.LlmRuntime,{}],[prompt.SystemPrompt,{includeHarnessIdentity:false,includeRuntimeContext:false}],[tools.ToolRuntime,{}],[fsLocal.default,{cwd:root}],[wd.WorkingDirectoryService,{}],[loop.AgentLoop,{agents:[],maxParallelToolCalls:4}]])await ctx.plugin(service,options);
+  const executor=new native.NativeToolExecutor(ctx);ctx.tools.setExecutor(executor);
   ctx.provide('loader',{import:spec=>spec==='@deepseek-ai/dsh-token-meter/client'?tokenClient:mod(spec.replace('@deepseek-ai/',''))});
-  await ctx.plugin((await mod('dsh-spill-local')).default,{});await ctx.plugin(await mod('dsh-tool-fs'),{readImage:false});
+  await ctx.plugin((await mod('dsh-spill-local')).default,{root:join(attemptRoot,'spills'),cleanupPeriodDays:0});await ctx.plugin(await mod('dsh-tool-fs'),{readImage:false});
   await ctx.plugin((await mod('dsh-subprocess-local')).default,{});await ctx.plugin((await mod('dsh-bash-local')).default,{cwd:root});
   await ctx.plugin(await mod('dsh-shell-env'),{});await ctx.plugin(await mod('dsh-tool-bash'),{enableRunInBackground:false});
   await ctx.plugin(Plugin,{configPath,diagnosticsPath:join(attemptRoot,'diagnostics.jsonl')});
   ctx.systemPrompt.section({name:'smoke-coding-contract',order:1,text:'You are a coding agent. Complete the one user repair task using the provided filesystem and bash tools. Work only in the given isolated project; do not read credentials or other projects. Read existing text before editing it. Use read to inspect files; do not shell-cat text. Preserve test expectations. Check real command exit codes. Do not claim verification without executing it. Continue until the task is done. Do not manufacture logs or evidence.'});
   const sessionId=`gongjuyasuo-${repair?REPAIR_SCOPE:running?'smoke-'+number:'preflight'}-${Date.now()}`;
   handle=await ctx.agents.create({sessionId,meta:{cwd:root},agentOptions:{provider:'openai-codex',model:'gpt-6.1-sol'}});
-  const schemas=ctx.tools.wireSchemas(handle.agent).schemas.map(t=>t.name);
+  const schemas=executor.describe(ctx.tools.definitions(handle.agent)).schemas.map(t=>t.name);
   for(const name of ['read','write','edit','bash','gongjuyasuo'])if(!schemas.includes(name))throw new Error('MISSING_ACTUAL_TOOL_'+name);
   await writeFile(join(attemptRoot,'actual-tool-list.json'),JSON.stringify({capabilities:ctx.tools.schemas(handle.agent).map(t=>t.name),wire:schemas},null,2));
   await writeFile(join(attemptRoot,'source-hashes.json'),JSON.stringify(sourceHashes,null,2));
   if(preparing) {
-    const readResult=await ctx.tools.execute({name:'read',callId:'preflight-read',agent:handle.agent,arguments:{file_path:join(root,'docs/contract.md')},signal:new AbortController().signal});
+    const runTool=async(name,id,args)=>(await ctx.tools.execute({calls:[{type:'tool-call',id,name,arguments:JSON.stringify(args)}],agent:handle.agent,signal:new AbortController().signal})).results[0].result;
+    const readResult=await runTool('read','preflight-read',{file_path:join(root,'docs/contract.md')});
     await writeFile(join(attemptRoot,'real-read-result.json'),JSON.stringify(readResult,null,2));
     if(readResult.isError||!readResult.content.some(c=>c.type==='text'&&c.text.includes('Atomicity')))throw new Error('REAL_READ_PREFLIGHT_FAILED');
-    const execution=await ctx.tools.execute({name:'bash',callId:'preflight-bash',agent:handle.agent,arguments:{command:'/usr/local/bin/node --version',description:'Verify isolated Node runtime',workdir:root},signal:new AbortController().signal});
+    const execution=await runTool('bash','preflight-bash',{command:'/usr/local/bin/node --version',description:'Verify isolated Node runtime',workdir:root});
     await writeFile(join(attemptRoot,'real-bash-result.json'),JSON.stringify(execution,null,2));
     if(execution.isError||execution.value?.kind!=='foreground'||execution.value.exitCode!==0||execution.value.timedOut)throw new Error('REAL_BASH_PREFLIGHT_FAILED');
-    outcome={...outcome,ok:true,modelCalls:0,schemas,credentialServiceLoaded:false,realRead:true,realBash:true,formalConfigUnchanged:repair?true:null,planRequiredForRun:repair?planPath:null,modelSampleConsumed:false};
+    const inspection=await runTool('gongjuyasuo','preflight-inspect',{action:'inspect'});
+    await writeFile(join(attemptRoot,'real-gongjuyasuo-result.json'),JSON.stringify(inspection,null,2));
+    if(inspection.isError||inspection.value?.ok!==true||!Array.isArray(inspection.value?.candidates))throw new Error('REAL_PLUGIN_INSPECT_PREFLIGHT_FAILED');
+    const diagnostics=(await readFile(join(attemptRoot,'diagnostics.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
+    const loaded=diagnostics.find(entry=>entry.kind==='loaded');
+    const runtimeHash=hash((await Promise.all(['index.js','core.js','observability.js','telemetry.js'].map(name=>readFile(join(pluginRoot,'lib',name),'utf8')))).join(''));
+    if(loaded?.runtime?.version!==Plugin.VERSION||loaded.runtime.sourceHash!==runtimeHash)throw new Error('PLUGIN_RUNTIME_SOURCE_MISMATCH');
+    outcome={...outcome,ok:true,modelCalls:0,schemas,credentialServiceLoaded:false,realRead:true,realBash:true,realPluginInspect:true,runtimeSourceHash:runtimeHash,formalConfigUnchanged:repair?true:null,planRequiredForRun:repair?planPath:null,modelSampleConsumed:false};
   } else {
     // This branch is the sole model entry. --repair-run has already consumed its one ledger slot.
     await ctx.plugin((await mod('dsh-credentials-local')).default,{watch:false});

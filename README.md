@@ -4,7 +4,7 @@
   <p><strong>先交接状态，再释放工具正文；需要时找回原文。</strong></p>
   <p>面向单个长任务的实验性 DeepSeek Harness 本地 Host 插件。</p>
   <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
-  <p><a href="package.json">插件 0.1.5</a> · 纯 Host / ESM · 无额外总结模型</p>
+  <p><a href="package.json">插件 0.1.6</a> · 纯 Host / ESM · 无额外总结模型</p>
   <p><a href="#核心能力">核心能力</a> · <a href="#工作方式">工作方式</a> · <a href="#快速开始">快速开始</a> · <a href="#配置">配置</a> · <a href="#验证与限制">验证与限制</a> · <a href="#常见问题">常见问题</a></p>
 </div>
 
