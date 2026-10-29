@@ -4,7 +4,7 @@
   <p><strong>Hand off the state. Release tool text. Keep the original recoverable.</strong></p>
   <p>An experimental local Host plugin for individual long-running DeepSeek Harness tasks.</p>
   <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-  <p><a href="package.json">Plugin 0.1.4</a> · Host-only / ESM · No additional summarization model</p>
+  <p><a href="package.json">Plugin 0.1.5</a> · Host-only / ESM · No additional summarization model</p>
   <p><a href="#features">Features</a> · <a href="#how-it-works">How it works</a> · <a href="#quick-start">Quick start</a> · <a href="#configuration">Configuration</a> · <a href="#validation-and-limitations">Validation and limitations</a> · <a href="#faq">FAQ</a></p>
 </div>
 
@@ -92,7 +92,7 @@ In the same authenticated DSH environment, `GET /api/dsh-gongjuyasuo` reports th
 
 `checkpoint` requires `state`, nonempty `covered`, and `retain` (use `[]` when nothing is retained). Explicit `previousCheckpoint:null` is recommended for the first checkpoint. `resolvedIssues` may be omitted or `[]`, but that never permits dropping previous unresolved issues. Inherited constraints must remain; unresolved issues must be carried unchanged or explicitly resolved with supported evidence.
 
-`state` contains `subgoal`, `nextStep`, `findings`, `constraints`, `changes`, `validation`, `unresolved`, and `hypotheses`. Each covered item needs a real ref, a conclusion, a literal quote of at least 16 characters, and `noLongerDirectlyNeeded:true`. Direct dependencies and sources of unresolved errors must be retained.
+`state` contains `subgoal`, `nextStep`, `findings`, `constraints`, `changes`, `validation`, `unresolved`, and `hypotheses`. Each finding needs a nonempty `refs` array. Each covered item needs a real ref, a conclusion, a literal quote of at least 16 characters, and `noLongerDirectlyNeeded:true`. Direct dependencies and sources of unresolved errors must be retained. Validation failures identify the fields and preserve the originals. Repeated identical field errors for the same candidate set delay reminders by 2, 4, then at most 8 times the normal interval; a changed candidate set or successful checkpoint clears that backoff.
 
 Only pure-text results with a known call, confirmed successful consumption, expired recent protection, and current content identical to the original append qualify. NUL text, errors, mixed content, existing spills, upstream replacements, inherited sources, and invalid handoffs remain intact. Prepare and commit share one formula and deduct a 400-character receipt reserve; insufficient budgets are rejected explicitly without lowering the threshold.
 

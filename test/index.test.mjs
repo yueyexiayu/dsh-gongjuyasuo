@@ -82,6 +82,25 @@ test('same candidates remind again only after real non-gongjuyasuo progress and 
   assert.ok(f.session.surface.nodes.includes(e.seq));assert.equal(f.saves(),0);
 });
 
+test('repeated invalid checkpoint submissions back off reminders until the interval or candidates change',async t=>{
+  const f=await pluginFixture(t,{settings:{reminderIntervalRequests:2}}),event=f.tool();for(let i=0;i<3;i++) f.request();
+  const c=core.candidate(f.j,event.seq,core.settings({...core.DEFAULTS,thresholdChars:100,recentProtectionRequests:2}));
+  const first=await f.preStep();assert.equal(first.messages.length,1);f.session.append('user/message',first.messages[0],{surfaceOp:'append'});
+  successful(await f.execute({action:'inspect'}));f.request();
+  const invalid=f.checkpoint(c);invalid.state.findings[0].refs=[];
+  assert.equal(successful(await f.execute(invalid)).code,'INVALID_STATE_FIELDS');
+  assert.equal(successful(await f.execute(invalid)).code,'INVALID_STATE_FIELDS');
+  const saved=await f.ctx.sessionQuery.readSession(f.session.id);
+  const replay=await pluginFixture(t,{id:f.session.id,seed:JSON.parse(JSON.stringify(saved.events)),meta:{cwd:f.dir},settings:{reminderIntervalRequests:2}});
+  assert.equal((await replay.preStep()).messages.length,0,'failure backoff survives journal replay');
+  f.tool('real progress',{name:'read'});
+  for(let i=0;i<7;i++){f.request();assert.equal((await f.preStep()).messages.length,0);}
+  f.request();assert.equal((await f.preStep()).messages.length,1,'two matching failures wait 8 successful requests');
+  const nextEvent=f.tool();for(let i=0;i<3;i++) f.request();const next=core.candidate(f.j,nextEvent.seq,core.settings({...core.DEFAULTS,thresholdChars:100,recentProtectionRequests:2}));assert.notEqual(next.ref,c.ref);
+  assert.equal((await f.preStep()).messages.length,1,'new eligible evidence clears failure backoff');
+  assert.ok(f.session.surface.nodes.includes(c.seq));assert.equal(f.saves(),0);
+});
+
 test('offline diagnostics route replays retained JSON events through real SessionQuery without a false 404',async t=>{
   const f=await pluginFixture(t),c=f.age(f.tool());successful(await f.execute({action:'inspect'}));f.request();successful(await f.execute(f.checkpoint(c)));await f.preStep();successful(await f.execute({action:'recover',ref:c.ref}));
   const source=await f.ctx.sessionQuery.readSession(f.session.id);

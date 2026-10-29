@@ -55,3 +55,17 @@ test('missing required checkpoint fields are explained without blaming the optio
   assert.match(JSON.stringify(detailed.fieldErrors),/covered/);assert.match(JSON.stringify(detailed.fieldErrors),/retain/);assert.doesNotMatch(JSON.stringify(detailed.fieldErrors),/resolvedIssues/);
   assert.equal(f.saves(),0);
 });
+
+test('invalid findings and source references identify exact fields and preserve originals until repaired',async t=>{
+  const f=await pluginFixture(t),c=f.age(f.tool());value(await f.execute({action:'inspect'}));f.request();
+  const cp=f.checkpoint(c),before=[...f.session.surface.nodes];
+  const empty=structuredClone(cp);empty.state.findings[0].refs=[];
+  const rejected=value(await f.execute(empty));assert.equal(rejected.code,'INVALID_STATE_FIELDS');assert.match(rejected.fieldErrors.join(' '),/state\.findings\[0\]\.refs/);assert.match(rejected.fieldErrors.join(' '),/nonempty/);
+  const foreign=structuredClone(cp);foreign.covered[0].ref='gy:invented';
+  const invalidRef=value(await f.execute(foreign));assert.equal(invalidRef.code,'UNADVERTISED_OR_FOREIGN_REF');assert.match(invalidRef.fieldErrors.join(' '),/covered\[0\]\.ref/);
+  const wrongQuote=structuredClone(cp);wrongQuote.covered[0].evidenceQuote='this quotation does not occur in the original';
+  const invalidQuote=value(await f.execute(wrongQuote));assert.equal(invalidQuote.code,'INSUFFICIENT_HANDOFF');assert.match(invalidQuote.fieldErrors.join(' '),/covered\[0\]\.evidenceQuote/);
+  assert.ok(before.every(seq=>f.session.surface.nodes.includes(seq)));assert.equal(f.saves(),0);
+  assert.equal(value(await f.execute(cp)).status,'queued-not-yet-folded');await f.preStep();
+  const recovered=value(await f.execute({action:'recover',ref:c.ref}));assert.equal(await readFile(recovered.path,'utf8'),c.text);
+});

@@ -4,7 +4,7 @@
   <p><strong>先交接状态，再释放工具正文；需要时找回原文。</strong></p>
   <p>面向单个长任务的实验性 DeepSeek Harness 本地 Host 插件。</p>
   <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
-  <p><a href="package.json">插件 0.1.4</a> · 纯 Host / ESM · 无额外总结模型</p>
+  <p><a href="package.json">插件 0.1.5</a> · 纯 Host / ESM · 无额外总结模型</p>
   <p><a href="#核心能力">核心能力</a> · <a href="#工作方式">工作方式</a> · <a href="#快速开始">快速开始</a> · <a href="#配置">配置</a> · <a href="#验证与限制">验证与限制</a> · <a href="#常见问题">常见问题</a></p>
 </div>
 
@@ -92,7 +92,7 @@ git clone https://github.com/yueyexiayu/dsh-gongjuyasuo.git "$DSH_HOME/plugins/d
 
 `checkpoint` 必须有 `state`、非空 `covered`、`retain`（没有保留项也传 `[]`）；首次建议显式传 `previousCheckpoint:null`。`resolvedIssues` 可省略或为 `[]`，但不能因此丢失旧未决项。继承约束必须保留，未决项必须原样承接或用有来源的明确解决记录关闭。
 
-`state` 包含 `subgoal`、`nextStep`、`findings`、`constraints`、`changes`、`validation`、`unresolved` 和 `hypotheses`。每个 covered 项需要真实 ref、结论、至少16字符逐字依据和 `noLongerDirectlyNeeded:true`。直接依赖或未解决错误的来源必须 retain。
+`state` 包含 `subgoal`、`nextStep`、`findings`、`constraints`、`changes`、`validation`、`unresolved` 和 `hypotheses`。每项 finding 的 `refs` 必须非空。每个 covered 项需要真实 ref、结论、至少16字符逐字依据和 `noLongerDirectlyNeeded:true`。直接依赖或未解决错误的来源必须 retain。校验失败会返回字段路径和修正提示，并保留原文。相同候选及相同字段错误反复失败时，提醒间隔依次延长至默认间隔的 2、4、8 倍；候选变化或交接成功后解除退避。
 
 只处理可定位调用、已明确成功消费、过近期保护期且当前正文仍与原 append 一致的纯文本。NUL、错误、混合内容、已有 spill、上游替换、继承源及无效交接保留。prepare/commit 使用同一公式，另扣400字符收据预留；不足时明确拒绝，不降低门槛。
 

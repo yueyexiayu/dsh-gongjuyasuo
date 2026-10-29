@@ -2,14 +2,15 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { fixture, installed, installedBase, config, llm } from './fixture.mjs';
 import { apply } from '../lib/index.js';
-const [{ToolRuntime},{SystemPrompt},tokenClient]=await Promise.all([
-  installed('dsh-tools'),installed('dsh-system-prompt'),import(installedBase+'dsh-token-meter/lib/types/client.js'),
+const [{ToolRuntime},{NativeToolExecutor},{SystemPrompt},tokenClient]=await Promise.all([
+  installed('dsh-tools'),installed('dsh-tool-executor-native'),installed('dsh-system-prompt'),import(installedBase+'dsh-token-meter/lib/types/client.js'),
 ]);
 
 export async function pluginFixture(t,options={}) {
   const f=await fixture(t,options);
   new SystemPrompt(f.ctx,{includeHarnessIdentity:false,includeRuntimeContext:false});
   const runtime=new ToolRuntime(f.ctx);
+  runtime.setExecutor(new NativeToolExecutor(f.ctx));
   const configPath=join(f.dir,'isolated-config.json');
   let current=config(options.settings);
   await writeFile(configPath,JSON.stringify(current));
@@ -27,7 +28,8 @@ export async function pluginFixture(t,options={}) {
   let serial=0;
   async function execute(args,{session=f.session,callId=`plugin-call-${++serial}`,persist=true,signal=new AbortController().signal}={}) {
     session.append('tool/call',{turn:1,step:1,callId,name:'gongjuyasuo',arguments:args});
-    const result=await runtime.execute({name:'gongjuyasuo',arguments:args,callId,agent:{session},signal});
+    const batch=await runtime.execute({calls:[{type:'tool-call',id:callId,name:'gongjuyasuo',arguments:JSON.stringify(args)}],agent:{session},signal});
+    const result=batch.results[0].result;
     if(persist) {
       const message=llm.freezeMessage({id:`result-${callId}-${session.seq}`,role:'tool',toolCallId:callId,source:{kind:'tool',callId},content:result.content,...(result.isError?{isError:true}:{})});
       session.append('tool/result',{turn:1,step:1,message,...(result.meta?{meta:result.meta}:{})},{surfaceOp:'append'});

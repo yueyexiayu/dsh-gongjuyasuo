@@ -16,7 +16,7 @@ export async function fixture(t, options={}) {
   const ctx = new Context();
   new SessionStore(ctx);
   new SessionProjectionRegistry(ctx);
-  new TokenMeter(ctx, {});
+  await ctx.plugin(TokenMeter, {});
   new SessionQueryEngine(ctx);
   const dir = await mkdtemp(join(tmpdir(), 'gongjuyasuo-tests-'));
   // The only recursive deletion target is the exact directory returned by mkdtemp.

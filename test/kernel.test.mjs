@@ -4,15 +4,16 @@ import { installed, installedBase, fixture, llm, core, commit, config } from './
 import * as Plugin from '../lib/index.js';
 import { join } from 'node:path';
 
-const [{AgentRegistry},{LlmRuntime},{SystemPrompt},{ToolRuntime},{AgentLoop},{default:FsLocal},{WorkingDirectoryService},{SubagentRuntime},Spawn,Fork,client]=await Promise.all([
-  installed('dsh-agent'),installed('dsh-llm'),installed('dsh-system-prompt'),installed('dsh-tools'),installed('dsh-agent-loop'),installed('dsh-fs-local'),installed('dsh-working-directory'),installed('dsh-subagent'),installed('dsh-subagent-spawn-in-process'),installed('dsh-subagent-fork-in-process'),import(installedBase+'dsh-token-meter/lib/types/client.js'),
+const [{AgentRegistry},{LlmRuntime},{SystemPrompt},{ToolRuntime},{NativeToolExecutor},{AgentLoop},{default:FsLocal},{WorkingDirectoryService},{SubagentRuntime},Spawn,Fork,client]=await Promise.all([
+  installed('dsh-agent'),installed('dsh-llm'),installed('dsh-system-prompt'),installed('dsh-tools'),installed('dsh-tool-executor-native'),installed('dsh-agent-loop'),installed('dsh-fs-local'),installed('dsh-working-directory'),installed('dsh-subagent'),installed('dsh-subagent-spawn-in-process'),installed('dsh-subagent-fork-in-process'),import(installedBase+'dsh-token-meter/lib/types/client.js'),
 ]);
 
 test('real Cordis plugin and AgentLoop expose gongjuyasuo to actual spawn and fork; zero model calls',async t=>{
   const f=await fixture(t),ctx=f.ctx;
-  new AgentRegistry(ctx);new LlmRuntime(ctx);new SystemPrompt(ctx,{includeHarnessIdentity:false,includeRuntimeContext:false});new ToolRuntime(ctx);
-  new FsLocal(ctx,{cwd:f.dir,diffBasisMaxBytes:1000000});new WorkingDirectoryService(ctx,{});
-  new AgentLoop(ctx,{agents:[],maxParallelToolCalls:{get:()=>10}});
+  await ctx.plugin(AgentRegistry);new LlmRuntime(ctx);new SystemPrompt(ctx,{includeHarnessIdentity:false,includeRuntimeContext:false});new ToolRuntime(ctx);
+  new FsLocal(ctx,{cwd:f.dir,diffBasisMaxBytes:1000000});await ctx.plugin(WorkingDirectoryService,{});
+  ctx.tools.setExecutor(new NativeToolExecutor(ctx));
+  await ctx.plugin(AgentLoop,{agents:[]});
   new SubagentRuntime(ctx,{maxDepth:{get:()=>1},maxActiveSubagents:{get:()=>8}});
   Spawn.apply(ctx,{providerName:'spawn'});Fork.apply(ctx,{providerName:'fork'});
   ctx.provide('loader',{import:spec=>spec==='@deepseek-ai/dsh-token-meter/client'?client:installed(spec.replace('@deepseek-ai/',''))});
@@ -25,12 +26,13 @@ test('real Cordis plugin and AgentLoop expose gongjuyasuo to actual spawn and fo
   // reject outside it, before AgentLoop can select/call any model adapter.
   ctx.on('agent/pre-step',async(info,next)=>{
     const decision=await next();
-    const result=await ctx.tools.execute({name:'gongjuyasuo',callId:`kernel-${info.agent.session.id}`,agent:info.agent,arguments:{action:'inspect'},signal:info.signal});
+    const id=`kernel-${info.agent.session.id}`,batch=await ctx.tools.execute({calls:[{type:'tool-call',id,name:'gongjuyasuo',arguments:JSON.stringify({action:'inspect'})}],agent:info.agent,signal:info.signal});
+    const result=batch.results[0].result;
     const snapshot=await ctx.sessionQuery.readSession(info.agent.session.id);
     observed.push({id:info.agent.session.id,parent:info.agent.session.header.parentSession,isSeeded:info.agent.session.header.isSeeded,inherited:snapshot.inheritedEventCount,schemas:ctx.tools.schemas(info.agent).map(x=>x.name),result,decision});
     return {kind:'reject',reason:'deterministic test: forbid real model'};
   },{global:true,prepend:true});
-  const parent=await ctx.agents.create({sessionId:'kernel-parent',meta:{cwd:f.dir}});
+  const parent=await ctx.agents.create({sessionId:'kernel-parent',meta:{cwd:f.dir},agentOptions:{provider:'synthetic',model:'no-model'}});
   const receipts=[];
   t.after(()=>{for(const receipt of receipts.reverse())receipt.dispose();parent.dispose();});
   parent.agent.followup(llm.createUserMessage({source:{kind:'user'},content:[{type:'text',text:'balanced parent seed; no model'}]}));await parent.agent.whenIdle();
@@ -39,6 +41,7 @@ test('real Cordis plugin and AgentLoop expose gongjuyasuo to actual spawn and fo
     receipts.push(receipt);await receipt.result;
     assert.equal(ctx.agents.get(receipt.childId),undefined,'completed caller-delivery child tears down');
   }
+  if(observed.length!==3) t.diagnostic(JSON.stringify((await ctx.sessionQuery.readSession(parent.agent.session.id)).events.map(e=>({type:e.type,error:e.data?.error,reason:e.data?.reason}))));
   assert.equal(observed.length,3);
   for(const row of observed){assert.ok(row.schemas.includes('gongjuyasuo'));assert.equal(row.result.isError,false);assert.equal(row.result.value.ok,true);assert.equal(row.decision.kind,'enter');}
   const children=observed.filter(x=>x.parent==='kernel-parent');assert.equal(children.length,2);
